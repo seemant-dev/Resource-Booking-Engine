@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — mapped directly from the approved UI/UX design board
+ * (booking-engine-desktop-board.html). Values are intentionally identical
+ * to that file's :root variables so the implementation matches the
+ * approved visuals exactly, not an approximation of them.
+ *
+ * The approved design is a fixed light desktop theme (no dark mode), so
+ * no prefers-color-scheme override is defined here.
+ */
+:root {
+  --color-bg: #f3f4f7;
+  --color-card: #ffffff;
+  --color-ink: #16181f;
+  --color-ink-2: #565b70;
+  --color-ink-3: #8b90a3;
+  --color-line: #dfe1e8;
+  --color-line-2: #cbced9;
+  --color-screen-bg: #fbfbfc;
+  --color-screen-line: #e6e8ee;
+
+  --color-sidebar-bg: #1b1e29;
+  --color-sidebar-line: #2c2f3d;
+  --color-sidebar-text: #aeb2c4;
+
+  --color-user: #3461fd;
+  --color-user-bg: #eaeffe;
+  --color-admin: #b5510a;
+  --color-admin-bg: #fdeee2;
+  --color-shared: #5b5f73;
+  --color-shared-bg: #eceef3;
+
+  --color-accent: #16825d;
+  --color-accent-bg: #e3f3ec;
+  --color-danger: #c0352b;
+  --color-danger-bg: #fbeae8;
+  --color-warn-bg: #fdf2de;
+  --color-warn-ink: #8a5a06;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-card: var(--color-card);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-ink-3: var(--color-ink-3);
+  --color-line: var(--color-line);
+  --color-line-2: var(--color-line-2);
+  --color-screen-bg: var(--color-screen-bg);
+  --color-screen-line: var(--color-screen-line);
+
+  --color-sidebar-bg: var(--color-sidebar-bg);
+  --color-sidebar-line: var(--color-sidebar-line);
+  --color-sidebar-text: var(--color-sidebar-text);
+
+  --color-user: var(--color-user);
+  --color-user-bg: var(--color-user-bg);
+  --color-admin: var(--color-admin);
+  --color-admin-bg: var(--color-admin-bg);
+  --color-shared: var(--color-shared);
+  --color-shared-bg: var(--color-shared-bg);
+
+  --color-accent: var(--color-accent);
+  --color-accent-bg: var(--color-accent-bg);
+  --color-danger: var(--color-danger);
+  --color-danger-bg: var(--color-danger-bg);
+  --color-warn-bg: var(--color-warn-bg);
+  --color-warn-ink: var(--color-warn-ink);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+}
