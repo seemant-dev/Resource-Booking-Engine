@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarX } from "lucide-react";
 import { SetBreadcrumb } from "@/components/layout";
 import { BookingConfirmModal, BookingConflictModal } from "@/components/bookings";
 import { SlotGrid } from "@/components/resources";
 import { Button, EmptyState, Field, Toast } from "@/components/ui";
 import { getResourceById, getSlotsForResource } from "@/data";
+import { getResourceByIdFromApi } from "@/lib/api";
 import type { Slot } from "@/types";
 
 /**
@@ -34,6 +35,20 @@ export default function ResourceDetailPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [bookedSlot, setBookedSlot] = useState<Slot | null>(null);
+  const [backendPingStatus, setBackendPingStatus] = useState<"idle" | "ok" | "error">("idle"); // backend ping health check
+
+  useEffect(() => {
+  if (params.resourceId !== "room-a") {
+    return;
+  }
+
+  getResourceByIdFromApi(1)
+    .then(() => {
+      setBackendPingStatus("ok");
+      console.log("Backend ping successful: ", backendPingStatus);
+    })
+    .catch(() => setBackendPingStatus("error"));
+}, [params.resourceId]);
 
   if (!resource) notFound();
 
