@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     boolean existsBySlotIdAndStatus(Long slotId, BookingStatus status);
+
+    long countBySlotIdAndStatus(Long slotId, BookingStatus status);
 }

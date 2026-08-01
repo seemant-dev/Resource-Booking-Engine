@@ -4,6 +4,7 @@ import com.resourcebooking.server.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
@@ -31,7 +32,8 @@ public class Booking {
     @Column(nullable = false, length = 20)
     private BookingStatus status = BookingStatus.CONFIRMED;
 
-    @Column(name = "booked_at", nullable = false, updatable = false, insertable = false)
+    @CreationTimestamp
+    @Column(name = "booked_at", nullable = false, updatable = false)
     private Instant bookedAt;
 
     @Setter

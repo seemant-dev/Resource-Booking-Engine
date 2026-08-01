@@ -1,5 +1,6 @@
 package com.resourcebooking.server.exception;
 
+import com.resourcebooking.server.common.DatabaseConstraints;
 import com.resourcebooking.server.dto.response.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,13 +53,7 @@ public class GlobalExceptionHandler {
             SlotAlreadyBookedException exception,
             HttpServletRequest request
     ) {
-        return new ErrorResponse(
-                HttpStatus.CONFLICT.value(),
-                "SLOT_ALREADY_BOOKED",
-                exception.getMessage(),
-                Instant.now(),
-                request.getRequestURI()
-        );
+        return slotAlreadyBookedResponse(exception.getMessage(), request);
     }
 
     @ExceptionHandler({
@@ -70,12 +65,9 @@ public class GlobalExceptionHandler {
             RuntimeException exception,
             HttpServletRequest request
     ) {
-        return new ErrorResponse(
-                HttpStatus.CONFLICT.value(),
-                "SLOT_ALREADY_BOOKED",
+        return slotAlreadyBookedResponse(
                 "Slot is no longer available. Please refresh and try again.",
-                Instant.now(),
-                request.getRequestURI()
+                request
         );
     }
 
@@ -85,6 +77,13 @@ public class GlobalExceptionHandler {
             DataIntegrityViolationException exception,
             HttpServletRequest request
     ) {
+        if (isBookingConfirmedSlotConstraintViolation(exception)) {
+            return slotAlreadyBookedResponse(
+                    "Slot is already booked.",
+                    request
+            );
+        }
+
         return new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
                 "DATA_INTEGRITY_VIOLATION",
@@ -114,5 +113,22 @@ public class GlobalExceptionHandler {
                 Instant.now(),
                 request.getRequestURI()
         );
+    }
+
+    private ErrorResponse slotAlreadyBookedResponse(String message, HttpServletRequest request) {
+        return new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "SLOT_ALREADY_BOOKED",
+                message,
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
+    private boolean isBookingConfirmedSlotConstraintViolation(DataIntegrityViolationException exception) {
+        String message = exception.getMostSpecificCause().getMessage();
+
+        return message != null
+                && message.contains(DatabaseConstraints.BOOKINGS_CONFIRMED_SLOT_UNIQUE);
     }
 }
