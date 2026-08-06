@@ -1,10 +1,12 @@
 package com.resourcebooking.server.service;
 
+import com.resourcebooking.server.config.properties.BookingProperties;
 import com.resourcebooking.server.dto.response.BookingResponse;
 import com.resourcebooking.server.entity.Booking;
 import com.resourcebooking.server.entity.Slot;
 import com.resourcebooking.server.entity.User;
 import com.resourcebooking.server.enums.BookingStatus;
+import com.resourcebooking.server.enums.LockingStrategy;
 import com.resourcebooking.server.exception.SlotAlreadyBookedException;
 import com.resourcebooking.server.exception.SlotNotFoundException;
 import com.resourcebooking.server.mapper.BookingMapper;
@@ -25,11 +27,11 @@ public class BookingService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
+    private final BookingProperties bookingProperties;
 
     @Transactional
     public BookingResponse bookSlot(Long slotId) {
-        Slot slot = slotRepository.findById(slotId)
-                .orElseThrow(() -> new SlotNotFoundException(slotId));
+        Slot slot = findSlotForBooking(slotId);
 
         if (slot.isBooked()) {
             throw new SlotAlreadyBookedException(slotId);
@@ -48,5 +50,15 @@ public class BookingService {
         Booking savedBooking = bookingRepository.save(booking);
 
         return bookingMapper.toResponse(savedBooking);
+    }
+
+    private Slot findSlotForBooking(Long slotId) {
+        if (bookingProperties.getLockingStrategy() == LockingStrategy.PESSIMISTIC) {
+            return slotRepository.findByIdWithLock(slotId)
+                    .orElseThrow(() -> new SlotNotFoundException(slotId));
+        }
+
+        return slotRepository.findById(slotId)
+                .orElseThrow(() -> new SlotNotFoundException(slotId));
     }
 }
