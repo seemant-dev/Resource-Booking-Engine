@@ -56,6 +56,21 @@ public class GlobalExceptionHandler {
         return slotAlreadyBookedResponse(exception.getMessage(), request);
     }
 
+    @ExceptionHandler(EmailAlreadyExistsException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleEmailAlreadyExists(
+            EmailAlreadyExistsException exception,
+            HttpServletRequest request
+    ) {
+        return new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "EMAIL_ALREADY_EXISTS",
+                exception.getMessage(),
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
     @ExceptionHandler({
             OptimisticLockException.class,
             ObjectOptimisticLockingFailureException.class
