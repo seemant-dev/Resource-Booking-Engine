@@ -4,6 +4,8 @@ import com.resourcebooking.server.common.DatabaseConstraints;
 import com.resourcebooking.server.dto.response.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -47,6 +49,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(BookingNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleBookingNotFound(
+            BookingNotFoundException exception,
+            HttpServletRequest request
+    ) {
+        return new ErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                "BOOKING_NOT_FOUND",
+                exception.getMessage(),
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
     @ExceptionHandler(SlotAlreadyBookedException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleSlotAlreadyBooked(
@@ -65,6 +82,39 @@ public class GlobalExceptionHandler {
         return new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
                 "EMAIL_ALREADY_EXISTS",
+                exception.getMessage(),
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler({
+            BadCredentialsException.class,
+            AuthenticationException.class
+    })
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ErrorResponse handleAuthenticationException(
+            AuthenticationException exception,
+            HttpServletRequest request
+    ) {
+        return new ErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(),
+                "INVALID_CREDENTIALS",
+                "Invalid email or password.",
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ErrorResponse handleRefreshTokenException(
+            InvalidRefreshTokenException exception,
+            HttpServletRequest request
+    ) {
+        return new ErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(),
+                "REFRESH_TOKEN_INVALID",
                 exception.getMessage(),
                 Instant.now(),
                 request.getRequestURI()

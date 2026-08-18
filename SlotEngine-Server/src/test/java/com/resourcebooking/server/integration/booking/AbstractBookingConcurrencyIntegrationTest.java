@@ -4,17 +4,21 @@ import com.resourcebooking.server.dto.response.BookingResponse;
 import com.resourcebooking.server.entity.Resource;
 import com.resourcebooking.server.entity.Slot;
 import com.resourcebooking.server.enums.BookingStatus;
+import com.resourcebooking.server.enums.Role;
 import com.resourcebooking.server.exception.SlotAlreadyBookedException;
 import com.resourcebooking.server.repository.BookingRepository;
 import com.resourcebooking.server.repository.ResourceRepository;
 import com.resourcebooking.server.repository.SlotRepository;
 import com.resourcebooking.server.service.BookingService;
+import com.resourcebooking.server.security.UserPrincipal;
 import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -146,6 +150,8 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
             readyLatch.countDown();
             startLatch.await();
 
+            authenticateAsPhaseTwoUser();
+
             try {
                 BookingResponse response = bookingService.bookSlot(slotId);
                 return response.getStatus() == BookingStatus.CONFIRMED
@@ -159,8 +165,29 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
                 return BookingAttemptResult.DATA_INTEGRITY_CONFLICT;
             } catch (RuntimeException exception) {
                 return BookingAttemptResult.OTHER_FAILURE;
+            } finally {
+                SecurityContextHolder.clearContext();
             }
         };
+    }
+
+    private void authenticateAsPhaseTwoUser() {
+        UserPrincipal principal = new UserPrincipal(
+                1L,
+                "Phase Two User",
+                "phase2.user@example.com",
+                "phase2-placeholder-password-hash",
+                Role.USER
+        );
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        principal.getAuthorities()
+                );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     private Slot createAvailableSlot(String strategyName) {

@@ -1,11 +1,14 @@
 package com.resourcebooking.server.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.resourcebooking.server.dto.response.ErrorResponse;
 import com.resourcebooking.server.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -13,10 +16,12 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import java.time.Instant;
 
 @Configuration
 @EnableMethodSecurity
@@ -24,6 +29,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -36,21 +42,27 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) ->
-                                response.sendError(
+                                writeErrorResponse(
+                                        response,
                                         HttpServletResponse.SC_UNAUTHORIZED,
-                                        "Authentication required"
+                                        "UNAUTHORIZED",
+                                        "Authentication required",
+                                        request.getRequestURI()
                                 )
                         )
                         .accessDeniedHandler((request, response, accessDeniedException) ->
-                                response.sendError(
+                                writeErrorResponse(
+                                        response,
                                         HttpServletResponse.SC_FORBIDDEN,
-                                        "Access denied"
+                                        "FORBIDDEN",
+                                        "Access denied",
+                                        request.getRequestURI()
                                 )
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/resources", "/api/resources/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/resources/*/slots").permitAll()
@@ -61,6 +73,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/resources/*/slots/generate").hasRole("ADMIN")
 
                         .requestMatchers(HttpMethod.POST, "/api/slots/*/book").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/me").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/bookings/*").hasAnyRole("USER", "ADMIN")
 
                         .anyRequest().authenticated()
                 )
@@ -84,5 +98,27 @@ public class SecurityConfig {
             AuthenticationConfiguration authenticationConfiguration
     ) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
+    }
+
+    private void writeErrorResponse(
+            HttpServletResponse response,
+            int status,
+            String error,
+            String message,
+            String path
+    ) throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
+        objectMapper.writeValue(
+                response.getOutputStream(),
+                new ErrorResponse(
+                        status,
+                        error,
+                        message,
+                        Instant.now(),
+                        path
+                )
+        );
     }
 }

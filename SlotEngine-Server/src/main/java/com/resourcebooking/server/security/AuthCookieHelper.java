@@ -57,6 +57,24 @@ public class AuthCookieHelper {
         );
     }
 
+    public void clearAuthCookies(HttpServletResponse response) {
+        addCookie(
+                response,
+                accessTokenCookieName,
+                "",
+                accessTokenPath,
+                Duration.ZERO
+        );
+
+        addCookie(
+                response,
+                refreshTokenCookieName,
+                "",
+                refreshTokenPath,
+                Duration.ZERO
+        );
+    }
+
     private void addCookie(
             HttpServletResponse response,
             String name,

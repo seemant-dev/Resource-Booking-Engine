@@ -2,6 +2,7 @@ package com.resourcebooking.server.service;
 
 import com.resourcebooking.server.entity.RefreshToken;
 import com.resourcebooking.server.entity.User;
+import com.resourcebooking.server.exception.InvalidRefreshTokenException;
 import com.resourcebooking.server.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,12 +28,24 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken createForUser(User user) {
+        refreshTokenRepository.deleteByUserId(user.getId());
+
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setToken(generateToken());
         refreshToken.setExpiresAt(Instant.now().plusSeconds(refreshTokenExpirationDays * 24 * 60 * 60));
 
         return refreshTokenRepository.save(refreshToken);
+    }
+
+    @Transactional
+    public RefreshToken rotate(String token) {
+        RefreshToken existingToken = findValidToken(token);
+        User user = existingToken.getUser();
+
+        refreshTokenRepository.deleteByToken(token);
+
+        return createForUser(user);
     }
 
     @Transactional(readOnly = true)
@@ -48,6 +61,22 @@ public class RefreshTokenService {
     @Transactional
     public void deleteExpiredTokens() {
         refreshTokenRepository.deleteByExpiresAtBefore(Instant.now());
+    }
+
+    private RefreshToken findValidToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new InvalidRefreshTokenException("Refresh token is missing.");
+        }
+
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
+                .orElseThrow(() -> new InvalidRefreshTokenException("Refresh token is invalid."));
+
+        if (refreshToken.isExpired()) {
+            refreshTokenRepository.deleteByToken(token);
+            throw new InvalidRefreshTokenException("Refresh token has expired.");
+        }
+
+        return refreshToken;
     }
 
     private String generateToken() {

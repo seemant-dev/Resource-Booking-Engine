@@ -78,8 +78,34 @@ public class AuthService {
         );
     }
 
+    @Transactional
+    public TokenRefreshResult refresh(String refreshTokenValue) {
+        RefreshToken newRefreshToken = refreshTokenService.rotate(refreshTokenValue);
+        UserPrincipal principal = UserPrincipal.from(newRefreshToken.getUser());
+
+        String accessToken = jwtTokenProvider.generateAccessToken(principal);
+
+        return new TokenRefreshResult(
+                accessToken,
+                newRefreshToken.getToken()
+        );
+    }
+
+    @Transactional
+    public void logout(String refreshTokenValue) {
+        if (refreshTokenValue != null && !refreshTokenValue.isBlank()) {
+            refreshTokenService.deleteByToken(refreshTokenValue);
+        }
+    }
+
     public record LoginResult(
             LoginResponse response,
+            String accessToken,
+            String refreshToken
+    ) {
+    }
+
+    public record TokenRefreshResult(
             String accessToken,
             String refreshToken
     ) {

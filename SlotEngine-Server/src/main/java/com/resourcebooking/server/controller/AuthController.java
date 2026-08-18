@@ -41,4 +41,29 @@ public class AuthController {
 
         return loginResult.response();
     }
+
+    @PostMapping("/refresh")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void refresh(
+            @CookieValue(name = "${app.security.cookie.refresh-token-name}", required = false) String refreshToken,
+            HttpServletResponse response
+    ) {
+        AuthService.TokenRefreshResult refreshResult = authService.refresh(refreshToken);
+
+        authCookieHelper.addAuthCookies(
+                response,
+                refreshResult.accessToken(),
+                refreshResult.refreshToken()
+        );
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(
+            @CookieValue(name = "${app.security.cookie.refresh-token-name}", required = false) String refreshToken,
+            HttpServletResponse response
+    ) {
+        authService.logout(refreshToken);
+        authCookieHelper.clearAuthCookies(response);
+    }
 }
