@@ -1,5 +1,5 @@
 import { SetBreadcrumb } from "@/components/layout";
-import { ResourceCard } from "@/components/resources";
+import { ResourceCard } from "@/components/resources/ResourceCard";
 import { mockResources } from "@/data";
 
 /**

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Slot } from "@/types";
 import { cn } from "@/lib/cn";
+import type { Slot } from "@/types";
 
 interface SlotGridProps {
   slots: Slot[];
@@ -10,20 +10,18 @@ interface SlotGridProps {
 }
 
 /**
- * The slot availability grid, matching `.cal-grid` / `.cal-cell` in the
- * approved design. Open slots are clickable and toggle a "selected"
- * visual state; taken slots are inert. This is local UI state only —
- * selecting a slot does not call any API, it just drives which slot the
- * "Book this slot" button on the parent page refers to.
+ * Slot calendar grid. Owns only selection state; booking remains the page's
+ * responsibility because the page controls confirmation and conflict UI.
  */
 export function SlotGrid({ slots, onSelect }: SlotGridProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleSelect = (slot: Slot) => {
     if (slot.status === "taken") return;
-    const next = selectedId === slot.id ? null : slot.id;
-    setSelectedId(next);
-    onSelect?.(next ? slot : null);
+
+    const nextSelectedId = selectedId === slot.id ? null : slot.id;
+    setSelectedId(nextSelectedId);
+    onSelect?.(nextSelectedId ? slot : null);
   };
 
   return (
