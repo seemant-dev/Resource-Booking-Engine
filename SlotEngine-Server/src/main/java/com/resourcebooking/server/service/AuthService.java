@@ -13,6 +13,7 @@ import com.resourcebooking.server.repository.UserRepository;
 import com.resourcebooking.server.security.JwtTokenProvider;
 import com.resourcebooking.server.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -44,6 +46,8 @@ public class AuthService {
         user.setRole(Role.USER);
 
         User savedUser = userRepository.save(user);
+
+        log.info("User registered userId={} role={}", savedUser.getId(), savedUser.getRole());
 
         return userMapper.toResponse(savedUser);
     }
@@ -71,6 +75,8 @@ public class AuthService {
                 principal.getName()
         );
 
+        log.info("Login succeeded userId={} role={}", principal.getId(), principal.getRole());
+
         return new LoginResult(
                 response,
                 accessToken,
@@ -84,6 +90,8 @@ public class AuthService {
         UserPrincipal principal = UserPrincipal.from(newRefreshToken.getUser());
 
         String accessToken = jwtTokenProvider.generateAccessToken(principal);
+
+        log.info("Access token refreshed userId={}", principal.getId());
 
         return new TokenRefreshResult(
                 accessToken,

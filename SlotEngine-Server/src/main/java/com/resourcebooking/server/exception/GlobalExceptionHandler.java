@@ -4,6 +4,7 @@ import com.resourcebooking.server.common.DatabaseConstraints;
 import com.resourcebooking.server.dto.response.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -97,6 +99,8 @@ public class GlobalExceptionHandler {
             AuthenticationException exception,
             HttpServletRequest request
     ) {
+        log.warn("Authentication failed path={}", request.getRequestURI());
+
         return new ErrorResponse(
                 HttpStatus.UNAUTHORIZED.value(),
                 "INVALID_CREDENTIALS",
@@ -149,6 +153,8 @@ public class GlobalExceptionHandler {
             );
         }
 
+        log.warn("Data integrity conflict path={}", request.getRequestURI());
+
         return new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
                 "DATA_INTEGRITY_VIOLATION",
@@ -181,6 +187,8 @@ public class GlobalExceptionHandler {
     }
 
     private ErrorResponse slotAlreadyBookedResponse(String message, HttpServletRequest request) {
+        log.warn("Booking conflict path={}", request.getRequestURI());
+
         return new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
                 "SLOT_ALREADY_BOOKED",

@@ -17,6 +17,7 @@ import com.resourcebooking.server.repository.SlotRepository;
 import com.resourcebooking.server.repository.UserRepository;
 import com.resourcebooking.server.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookingService {
@@ -57,6 +59,14 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
 
+        log.info(
+                "Booking created bookingId={} slotId={} userId={} lockingStrategy={}",
+                savedBooking.getId(),
+                slotId,
+                currentUserId,
+                bookingProperties.getLockingStrategy()
+        );
+
         return bookingMapper.toResponse(savedBooking);
     }
 
@@ -78,6 +88,7 @@ public class BookingService {
         assertCanCancelBooking(booking);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
+            log.info("Booking cancellation skipped bookingId={} reason=already_cancelled", bookingId);
             return bookingMapper.toResponse(booking);
         }
 
@@ -86,6 +97,13 @@ public class BookingService {
         booking.getSlot().setBooked(false);
 
         Booking savedBooking = bookingRepository.save(booking);
+
+        log.info(
+                "Booking cancelled bookingId={} slotId={} actorUserId={}",
+                savedBooking.getId(),
+                savedBooking.getSlot().getId(),
+                securityUtils.getCurrentUserId()
+        );
 
         return bookingMapper.toResponse(savedBooking);
     }
@@ -98,6 +116,11 @@ public class BookingService {
         boolean isAdmin = currentUserRole == Role.ADMIN;
 
         if (!ownsBooking && !isAdmin) {
+            log.warn(
+                    "Booking cancellation denied bookingId={} actorUserId={}",
+                    booking.getId(),
+                    currentUserId
+            );
             throw new AccessDeniedException("You can cancel only your own bookings");
         }
     }

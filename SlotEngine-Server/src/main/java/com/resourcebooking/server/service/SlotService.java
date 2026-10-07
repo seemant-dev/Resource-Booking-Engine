@@ -10,6 +10,7 @@ import com.resourcebooking.server.dto.request.SlotGenerateRequest;
 import com.resourcebooking.server.dto.response.SlotGenerateResponse;
 import com.resourcebooking.server.entity.Slot;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import java.util.List;
 import java.time.Duration;
 import java.time.Instant;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SlotService {
@@ -93,6 +95,15 @@ public class SlotService {
 
             currentDate = currentDate.plusDays(1);
         }
+
+        log.info(
+                "Slots generated resourceId={} startDate={} endDate={} generated={} skipped={}",
+                resourceId,
+                request.getStartDate(),
+                request.getEndDate(),
+                generated,
+                skipped
+        );
 
         return new SlotGenerateResponse(generated, skipped);
     }
