@@ -13,8 +13,18 @@ export type BookingResponse = {
   bookedAt: string;
 };
 
-export function getMyBookings(): Promise<BookingResponse[]> {
-  return apiRequest<BookingResponse[]>("/api/bookings/me", {
+export type BookingPageResponse = {
+  content: BookingResponse[];
+  page: number;
+  pageSize: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+};
+
+export function getMyBookings(page = 0): Promise<BookingPageResponse> {
+  return apiRequest<BookingPageResponse>(`/api/bookings/me?page=${page}`, {
     method: "GET",
   });
 }

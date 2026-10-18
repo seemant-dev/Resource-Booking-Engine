@@ -1,6 +1,7 @@
 package com.resourcebooking.server.service;
 
 import com.resourcebooking.server.config.properties.BookingProperties;
+import com.resourcebooking.server.dto.response.BookingPageResponse;
 import com.resourcebooking.server.dto.response.BookingResponse;
 import com.resourcebooking.server.entity.Booking;
 import com.resourcebooking.server.entity.Slot;
@@ -18,17 +19,22 @@ import com.resourcebooking.server.repository.UserRepository;
 import com.resourcebooking.server.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookingService {
+
+    private static final int MY_BOOKINGS_PAGE_SIZE = 50;
 
     private final SlotRepository slotRepository;
     private final UserRepository userRepository;
@@ -71,13 +77,31 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public List<BookingResponse> getMyBookings() {
+    public BookingPageResponse getMyBookings(int page) {
         Long currentUserId = securityUtils.getCurrentUserId();
 
-        return bookingRepository.findByUserIdOrderByBookedAtDesc(currentUserId)
-                .stream()
-                .map(bookingMapper::toResponse)
-                .toList();
+        Pageable pageable = PageRequest.of(
+                page,
+                MY_BOOKINGS_PAGE_SIZE,
+                Sort.by(
+                        Sort.Order.desc("bookedAt"),
+                        Sort.Order.desc("id")
+                )
+        );
+
+        Page<BookingResponse> bookingPage = bookingRepository
+                .findByUserId(currentUserId, pageable)
+                .map(bookingMapper::toResponse);
+
+        return new BookingPageResponse(
+                bookingPage.getContent(),
+                bookingPage.getNumber(),
+                bookingPage.getSize(),
+                bookingPage.getTotalElements(),
+                bookingPage.getTotalPages(),
+                bookingPage.hasNext(),
+                bookingPage.hasPrevious()
+        );
     }
 
     @Transactional

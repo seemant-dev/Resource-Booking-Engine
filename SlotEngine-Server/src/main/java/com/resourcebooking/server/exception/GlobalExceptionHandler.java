@@ -4,6 +4,7 @@ import com.resourcebooking.server.common.DatabaseConstraints;
 import com.resourcebooking.server.dto.response.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -175,6 +176,27 @@ public class GlobalExceptionHandler {
                 .stream()
                 .findFirst()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .orElse("Validation failed");
+
+        return new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "VALIDATION_FAILED",
+                message,
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleConstraintViolation(
+            ConstraintViolationException exception,
+            HttpServletRequest request
+    ) {
+        String message = exception.getConstraintViolations()
+                .stream()
+                .findFirst()
+                .map(violation -> violation.getMessage())
                 .orElse("Validation failed");
 
         return new ErrorResponse(
