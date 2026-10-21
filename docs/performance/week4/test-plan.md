@@ -153,8 +153,6 @@ For every before/after comparison:
 - Measured JDBC statement counts for the booking-history page.
 - Database correctness results for every contention round.
 - Optimistic/pessimistic comparison table.
-- One completed slow-SQL/N+1 fault card.
-- One completed concurrency fault card.
 - A final stable post-fix baseline tied to an exact commit.
 
 
