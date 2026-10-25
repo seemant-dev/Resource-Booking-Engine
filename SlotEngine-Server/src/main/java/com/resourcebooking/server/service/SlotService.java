@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,14 +28,15 @@ public class SlotService {
     private final SlotRepository slotRepository;
     private final ResourceRepository resourceRepository;
     private final SlotMapper slotMapper;
+    private final ZoneId businessTimeZone;
 
     @Transactional(readOnly = true)
     public List<SlotResponse> getSlotsForResourceOnDate(Long resourceId, LocalDate date) {
         Resource resource = resourceRepository.findById(resourceId)
                 .orElseThrow(() -> new ResourceNotFoundException(resourceId));
 
-        var startInclusive = date.atStartOfDay().toInstant(ZoneOffset.UTC);
-        var endExclusive = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        var startInclusive = date.atStartOfDay(businessTimeZone).toInstant();
+        var endExclusive = date.plusDays(1).atStartOfDay(businessTimeZone).toInstant();
 
         return slotRepository.findByResourceIdAndSlotStartBetween(
                         resource.getId(),
@@ -59,11 +60,13 @@ public class SlotService {
         while (!currentDate.isAfter(request.getEndDate())) {
             Instant currentStart = currentDate
                     .atTime(request.getDayStartTime())
-                    .toInstant(ZoneOffset.UTC);
+                    .atZone(businessTimeZone)
+                    .toInstant();
 
             Instant dayEnd = currentDate
                     .atTime(request.getDayEndTime())
-                    .toInstant(ZoneOffset.UTC);
+                    .atZone(businessTimeZone)
+                    .toInstant();
 
             Duration slotDuration = Duration.ofMinutes(request.getSlotDurationMinutes());
 

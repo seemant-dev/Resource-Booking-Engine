@@ -46,7 +46,9 @@ jobs:
         run: ./mvnw -B compile
 
       - name: Run backend tests
-        run: ./mvnw -B test
+        env:
+          DB_PASSWORD: resource_password
+        run: JWT_SECRET="$(openssl rand -hex 32)" ./mvnw -B test
 
       - name: Package backend jar
         run: ./mvnw -B package -DskipTests

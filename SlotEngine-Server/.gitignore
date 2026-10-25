@@ -34,3 +34,8 @@ build/
 
 ### Notes ###
 src/Notes/
+
+# Local environment values; keep the example in Git.
+/.env
+/.env.*
+!/.env.example

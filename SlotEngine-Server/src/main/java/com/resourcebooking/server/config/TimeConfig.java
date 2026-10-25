@@ -16,7 +16,7 @@ public class TimeConfig {
     }
 
     @Bean
-    public ZoneId businessTimeZone(@Value("${app.business-time-zone}") String zoneId) {
+    public ZoneId businessTimeZone(@Value("${app.timezone}") String zoneId) {
         return ZoneId.of(zoneId);
     }
 }
