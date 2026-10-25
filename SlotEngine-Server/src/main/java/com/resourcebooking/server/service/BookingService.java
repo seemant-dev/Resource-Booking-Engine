@@ -1,8 +1,8 @@
 package com.resourcebooking.server.service;
 
 import com.resourcebooking.server.config.properties.BookingProperties;
-import com.resourcebooking.server.dto.response.BookingPageResponse;
 import com.resourcebooking.server.dto.response.BookingResponse;
+import com.resourcebooking.server.dto.response.PageResponse;
 import com.resourcebooking.server.entity.Booking;
 import com.resourcebooking.server.entity.Slot;
 import com.resourcebooking.server.entity.User;
@@ -77,7 +77,7 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public BookingPageResponse getMyBookings(int page) {
+    public PageResponse<BookingResponse> getMyBookings(int page) {
         Long currentUserId = securityUtils.getCurrentUserId();
 
         Pageable pageable = PageRequest.of(
@@ -93,7 +93,7 @@ public class BookingService {
                 .findByUserId(currentUserId, pageable)
                 .map(bookingMapper::toResponse);
 
-        return new BookingPageResponse(
+        return new PageResponse<>(
                 bookingPage.getContent(),
                 bookingPage.getNumber(),
                 bookingPage.getSize(),

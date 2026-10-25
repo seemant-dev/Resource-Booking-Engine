@@ -7,9 +7,9 @@ import java.util.List;
 
 @Getter
 @AllArgsConstructor
-public class BookingPageResponse {
+public class PageResponse<T> {
 
-    private List<BookingResponse> content;
+    private List<T> content;
     private int page;
     private int pageSize;
     private long totalElements;

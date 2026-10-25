@@ -1,7 +1,7 @@
 package com.resourcebooking.server.controller;
 
-import com.resourcebooking.server.dto.response.BookingPageResponse;
 import com.resourcebooking.server.dto.response.BookingResponse;
+import com.resourcebooking.server.dto.response.PageResponse;
 import com.resourcebooking.server.service.BookingService;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ public class BookingController {
     private final BookingService bookingService;
 
     @GetMapping("/me")
-    public BookingPageResponse getMyBookings(
+    public PageResponse<BookingResponse> getMyBookings(
             @RequestParam(defaultValue = "0")
             @Min(value = 0, message = "Page must be zero or greater") int page
     ) {
