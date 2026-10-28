@@ -3,12 +3,15 @@ package com.resourcebooking.server.integration.booking;
 import com.resourcebooking.server.dto.response.BookingResponse;
 import com.resourcebooking.server.entity.Resource;
 import com.resourcebooking.server.entity.Slot;
+import com.resourcebooking.server.entity.User;
 import com.resourcebooking.server.enums.BookingStatus;
 import com.resourcebooking.server.enums.Role;
 import com.resourcebooking.server.exception.SlotAlreadyBookedException;
+import com.resourcebooking.server.integration.AbstractPostgresIntegrationTest;
 import com.resourcebooking.server.repository.BookingRepository;
 import com.resourcebooking.server.repository.ResourceRepository;
 import com.resourcebooking.server.repository.SlotRepository;
+import com.resourcebooking.server.repository.UserRepository;
 import com.resourcebooking.server.service.BookingService;
 import com.resourcebooking.server.security.UserPrincipal;
 import jakarta.persistence.OptimisticLockException;
@@ -31,7 +34,7 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-abstract class AbstractBookingConcurrencyIntegrationTest {
+abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgresIntegrationTest {
 
     private static final int ATTEMPT_COUNT = 20;
 
@@ -49,7 +52,11 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
     @Autowired
     private BookingRepository bookingRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     protected void verifyOnlyOneBookingSucceedsUnderConcurrentLoad(String strategyName) throws Exception {
+        TestUser bookingUser = createBookingUser(strategyName);
         Slot slot = createAvailableSlot(strategyName);
 
         ExecutorService executorService = Executors.newFixedThreadPool(ATTEMPT_COUNT);
@@ -60,7 +67,12 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
             List<Future<BookingAttemptResult>> futures = new ArrayList<>();
 
             for (int i = 0; i < ATTEMPT_COUNT; i++) {
-                futures.add(executorService.submit(createBookingAttempt(slot.getId(), readyLatch, startLatch)));
+                futures.add(executorService.submit(createBookingAttempt(
+                        slot.getId(),
+                        bookingUser,
+                        readyLatch,
+                        startLatch
+                )));
             }
 
             readyLatch.await();
@@ -143,6 +155,7 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
 
     private Callable<BookingAttemptResult> createBookingAttempt(
             Long slotId,
+            TestUser bookingUser,
             CountDownLatch readyLatch,
             CountDownLatch startLatch
     ) {
@@ -150,7 +163,7 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
             readyLatch.countDown();
             startLatch.await();
 
-            authenticateAsPhaseTwoUser();
+            authenticateAs(bookingUser);
 
             try {
                 BookingResponse response = bookingService.bookSlot(slotId);
@@ -171,13 +184,13 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
         };
     }
 
-    private void authenticateAsPhaseTwoUser() {
+    private void authenticateAs(TestUser user) {
         UserPrincipal principal = new UserPrincipal(
-                1L,
-                "Phase Two User",
-                "phase2.user@example.com",
-                "phase2-placeholder-password-hash",
-                Role.USER
+                user.id(),
+                user.name(),
+                user.email(),
+                user.passwordHash(),
+                user.role()
         );
 
         UsernamePasswordAuthenticationToken authentication =
@@ -188,6 +201,24 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
                 );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    private TestUser createBookingUser(String strategyName) {
+        User user = new User();
+        user.setName(strategyName + " Concurrency User");
+        user.setEmail(strategyName + "-concurrency@example.com");
+        user.setPasswordHash("test-only-password-hash");
+        user.setRole(Role.USER);
+
+        User savedUser = userRepository.save(user);
+
+        return new TestUser(
+                savedUser.getId(),
+                savedUser.getName(),
+                savedUser.getEmail(),
+                savedUser.getPasswordHash(),
+                savedUser.getRole()
+        );
     }
 
     private Slot createAvailableSlot(String strategyName) {
@@ -212,6 +243,15 @@ abstract class AbstractBookingConcurrencyIntegrationTest {
         OPTIMISTIC_LOCK_CONFLICT,
         DATA_INTEGRITY_CONFLICT,
         OTHER_FAILURE
+    }
+
+    private record TestUser(
+            Long id,
+            String name,
+            String email,
+            String passwordHash,
+            Role role
+    ) {
     }
 
     private record BookingAttemptCounts(

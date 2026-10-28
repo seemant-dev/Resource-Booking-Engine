@@ -9,21 +9,6 @@ jobs:
     name: Backend compile and tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: resource_booking_db
-          POSTGRES_USER: resource_user
-          POSTGRES_PASSWORD: resource_password
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U resource_user -d resource_booking_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     defaults:
       run:
         working-directory: SlotEngine-Server
@@ -46,8 +31,6 @@ jobs:
         run: ./mvnw -B compile
 
       - name: Run backend tests
-        env:
-          DB_PASSWORD: resource_password
         run: JWT_SECRET="$(openssl rand -hex 32)" ./mvnw -B test
 
       - name: Package backend jar

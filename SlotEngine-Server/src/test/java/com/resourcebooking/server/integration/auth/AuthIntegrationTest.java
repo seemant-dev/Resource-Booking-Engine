@@ -3,6 +3,7 @@ package com.resourcebooking.server.integration.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.resourcebooking.server.entity.User;
 import com.resourcebooking.server.enums.Role;
+import com.resourcebooking.server.integration.AbstractPostgresIntegrationTest;
 import com.resourcebooking.server.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class AuthIntegrationTest {
+class AuthIntegrationTest extends AbstractPostgresIntegrationTest {
 
     private static final String PASSWORD = "Password@123";
 
