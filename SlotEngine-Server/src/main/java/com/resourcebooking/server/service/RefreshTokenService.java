@@ -28,8 +28,6 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken createForUser(User user) {
-        refreshTokenRepository.deleteByUserId(user.getId());
-
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setToken(generateToken());
@@ -43,7 +41,12 @@ public class RefreshTokenService {
         RefreshToken existingToken = findValidToken(token);
         User user = existingToken.getUser();
 
-        refreshTokenRepository.deleteByToken(token);
+        int deletedTokenCount = refreshTokenRepository.deleteByToken(token);
+        if (deletedTokenCount != 1) {
+            throw new InvalidRefreshTokenException(
+                    "Refresh token is invalid or has already been used."
+            );
+        }
 
         return createForUser(user);
     }

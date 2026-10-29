@@ -1,6 +1,7 @@
 package com.resourcebooking.server.integration.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.resourcebooking.server.entity.RefreshToken;
 import com.resourcebooking.server.entity.User;
 import com.resourcebooking.server.enums.Role;
 import com.resourcebooking.server.integration.AbstractPostgresIntegrationTest;
@@ -16,7 +17,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
@@ -122,6 +129,85 @@ class AuthIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void loginShouldPreserveRefreshTokensForOtherSessions() throws Exception {
+        String email = uniqueEmail("multi-session");
+        registerUser("Multi Session User", email, PASSWORD);
+
+        Cookie firstSessionRefreshToken = loginAndGetRefreshToken(email, PASSWORD);
+        Cookie secondSessionRefreshToken = loginAndGetRefreshToken(email, PASSWORD);
+
+        RefreshToken firstStoredToken = refreshTokenRepository
+                .findByToken(firstSessionRefreshToken.getValue())
+                .orElseThrow();
+        RefreshToken secondStoredToken = refreshTokenRepository
+                .findByToken(secondSessionRefreshToken.getValue())
+                .orElseThrow();
+
+        assertThat(firstStoredToken.getUser().getId())
+                .isEqualTo(secondStoredToken.getUser().getId());
+        assertThat(firstStoredToken.getToken())
+                .isNotEqualTo(secondStoredToken.getToken());
+    }
+
+    @Test
+    void concurrentRefreshShouldAllowExactlyOneRotation() throws Exception {
+        String email = uniqueEmail("concurrent-refresh");
+        registerUser("Concurrent Refresh User", email, PASSWORD);
+
+        Cookie refreshToken = loginAndGetRefreshToken(email, PASSWORD);
+        Cookie otherSessionRefreshToken = loginAndGetRefreshToken(email, PASSWORD);
+
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        CountDownLatch readyLatch = new CountDownLatch(2);
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        try {
+            Future<MvcResult> firstAttempt = executorService.submit(
+                    () -> refreshConcurrently(refreshToken.getValue(), readyLatch, startLatch)
+            );
+            Future<MvcResult> secondAttempt = executorService.submit(
+                    () -> refreshConcurrently(refreshToken.getValue(), readyLatch, startLatch)
+            );
+
+            assertThat(readyLatch.await(5, TimeUnit.SECONDS)).isTrue();
+            startLatch.countDown();
+
+            List<MvcResult> results = List.of(
+                    firstAttempt.get(10, TimeUnit.SECONDS),
+                    secondAttempt.get(10, TimeUnit.SECONDS)
+            );
+
+            assertThat(results)
+                    .extracting(result -> result.getResponse().getStatus())
+                    .containsExactlyInAnyOrder(204, 401);
+
+            MvcResult successfulResult = results.stream()
+                    .filter(result -> result.getResponse().getStatus() == 204)
+                    .findFirst()
+                    .orElseThrow();
+            MvcResult rejectedResult = results.stream()
+                    .filter(result -> result.getResponse().getStatus() == 401)
+                    .findFirst()
+                    .orElseThrow();
+
+            Cookie replacementRefreshToken = successfulResult.getResponse().getCookie("refresh_token");
+
+            assertThat(replacementRefreshToken).isNotNull();
+            assertThat(replacementRefreshToken.getValue()).isNotEqualTo(refreshToken.getValue());
+            assertThat(objectMapper.readTree(rejectedResult.getResponse().getContentAsString())
+                    .path("error")
+                    .asText()).isEqualTo("REFRESH_TOKEN_INVALID");
+
+            assertThat(refreshTokenRepository.findByToken(refreshToken.getValue())).isEmpty();
+            assertThat(refreshTokenRepository.findByToken(replacementRefreshToken.getValue())).isPresent();
+            assertThat(refreshTokenRepository.findByToken(otherSessionRefreshToken.getValue())).isPresent();
+        } finally {
+            startLatch.countDown();
+            executorService.shutdownNow();
+        }
+    }
+
+    @Test
     void registerShouldRejectDuplicateEmail() throws Exception {
         String email = uniqueEmail("duplicate");
         registerUser("First User", email, PASSWORD);
@@ -222,6 +308,37 @@ class AuthIntegrationTest extends AbstractPostgresIntegrationTest {
         assertThat(accessToken).isNotNull();
 
         return accessToken;
+    }
+
+    private Cookie loginAndGetRefreshToken(String email, String password) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "email", email,
+                                "password", password
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("refresh_token"))
+                .andReturn();
+
+        Cookie refreshToken = result.getResponse().getCookie("refresh_token");
+
+        assertThat(refreshToken).isNotNull();
+
+        return refreshToken;
+    }
+
+    private MvcResult refreshConcurrently(
+            String refreshTokenValue,
+            CountDownLatch readyLatch,
+            CountDownLatch startLatch
+    ) throws Exception {
+        readyLatch.countDown();
+        startLatch.await();
+
+        return mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new Cookie("refresh_token", refreshTokenValue)))
+                .andReturn();
     }
 
     private String createAdminUser() {
