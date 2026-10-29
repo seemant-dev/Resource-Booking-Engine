@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.resourcebooking.server.entity.User;
 import com.resourcebooking.server.enums.Role;
 import com.resourcebooking.server.integration.AbstractPostgresIntegrationTest;
+import com.resourcebooking.server.repository.RefreshTokenRepository;
 import com.resourcebooking.server.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,9 @@ class AuthIntegrationTest extends AbstractPostgresIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -80,6 +84,41 @@ class AuthIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(cookie().httpOnly("access_token", true))
                 .andExpect(cookie().exists("refresh_token"))
                 .andExpect(cookie().httpOnly("refresh_token", true));
+    }
+
+    @Test
+    void logoutShouldRevokeRefreshTokenAndRejectReuse() throws Exception {
+        String email = uniqueEmail("logout");
+        registerUser("Logout User", email, PASSWORD);
+
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "email", email,
+                                "password", PASSWORD
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("refresh_token"))
+                .andReturn();
+
+        Cookie refreshToken = loginResult.getResponse().getCookie("refresh_token");
+
+        assertThat(refreshToken).isNotNull();
+        assertThat(refreshToken.getPath()).isEqualTo("/api/auth");
+        assertThat(refreshTokenRepository.findByToken(refreshToken.getValue())).isPresent();
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(refreshToken))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge("access_token", 0))
+                .andExpect(cookie().maxAge("refresh_token", 0));
+
+        assertThat(refreshTokenRepository.findByToken(refreshToken.getValue())).isEmpty();
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(refreshToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("REFRESH_TOKEN_INVALID"));
     }
 
     @Test
