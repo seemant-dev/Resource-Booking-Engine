@@ -1,5 +1,7 @@
 package com.resourcebooking.server;
 
+import com.resourcebooking.server.config.properties.CookieProperties;
+import com.resourcebooking.server.config.properties.CorsProperties;
 import com.resourcebooking.server.integration.AbstractPostgresIntegrationTest;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,12 @@ class ServerApplicationTests extends AbstractPostgresIntegrationTest {
 	@Autowired
 	private Flyway flyway;
 
+	@Autowired
+	private CookieProperties cookieProperties;
+
+	@Autowired
+	private CorsProperties corsProperties;
+
 	@Test
 	void contextLoads() throws SQLException {
 		try (Connection connection = dataSource.getConnection()) {
@@ -34,6 +42,11 @@ class ServerApplicationTests extends AbstractPostgresIntegrationTest {
 				.map(migration -> migration.getVersion().getVersion())
 				.toList())
 				.containsExactlyInAnyOrder("1", "2", "3", "4");
+
+		assertThat(cookieProperties.isSecure()).isFalse();
+		assertThat(cookieProperties.getSameSite()).isEqualTo("Lax");
+		assertThat(corsProperties.getAllowedOrigins())
+				.containsExactly("http://localhost:3000");
 	}
 
 }

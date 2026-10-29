@@ -1,6 +1,8 @@
 package com.resourcebooking.server.security;
 
+import com.resourcebooking.server.config.properties.CookieProperties;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -9,31 +11,16 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 
 @Component
+@RequiredArgsConstructor
 public class AuthCookieHelper {
 
-    @Value("${app.security.cookie.access-token-name}")
-    private String accessTokenCookieName;
-
-    @Value("${app.security.cookie.refresh-token-name}")
-    private String refreshTokenCookieName;
-
-    @Value("${app.security.cookie.access-token-path}")
-    private String accessTokenPath;
-
-    @Value("${app.security.cookie.refresh-token-path}")
-    private String refreshTokenPath;
+    private final CookieProperties cookieProperties;
 
     @Value("${app.security.jwt.access-token-expiration-minutes}")
     private long accessTokenExpirationMinutes;
 
     @Value("${app.security.refresh-token.expiration-days}")
     private long refreshTokenExpirationDays;
-
-    @Value("${app.security.cookie.secure}")
-    private boolean secureCookie;
-
-    @Value("${app.security.cookie.same-site}")
-    private String sameSite;
 
     public void addAuthCookies(
             HttpServletResponse response,
@@ -42,17 +29,17 @@ public class AuthCookieHelper {
     ) {
         addCookie(
                 response,
-                accessTokenCookieName,
+                cookieProperties.getAccessTokenName(),
                 accessToken,
-                accessTokenPath,
+                cookieProperties.getAccessTokenPath(),
                 Duration.ofMinutes(accessTokenExpirationMinutes)
         );
 
         addCookie(
                 response,
-                refreshTokenCookieName,
+                cookieProperties.getRefreshTokenName(),
                 refreshToken,
-                refreshTokenPath,
+                cookieProperties.getRefreshTokenPath(),
                 Duration.ofDays(refreshTokenExpirationDays)
         );
     }
@@ -60,17 +47,17 @@ public class AuthCookieHelper {
     public void clearAuthCookies(HttpServletResponse response) {
         addCookie(
                 response,
-                accessTokenCookieName,
+                cookieProperties.getAccessTokenName(),
                 "",
-                accessTokenPath,
+                cookieProperties.getAccessTokenPath(),
                 Duration.ZERO
         );
 
         addCookie(
                 response,
-                refreshTokenCookieName,
+                cookieProperties.getRefreshTokenName(),
                 "",
-                refreshTokenPath,
+                cookieProperties.getRefreshTokenPath(),
                 Duration.ZERO
         );
     }
@@ -84,8 +71,8 @@ public class AuthCookieHelper {
     ) {
         ResponseCookie cookie = ResponseCookie.from(name, value)
                 .httpOnly(true)
-                .secure(secureCookie)
-                .sameSite(sameSite)
+                .secure(cookieProperties.isSecure())
+                .sameSite(cookieProperties.getSameSite())
                 .path(path)
                 .maxAge(maxAge)
                 .build();
