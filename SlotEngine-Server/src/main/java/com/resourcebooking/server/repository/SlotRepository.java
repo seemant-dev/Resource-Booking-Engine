@@ -26,10 +26,18 @@ public interface SlotRepository extends JpaRepository<Slot, Long> {
             Instant endExclusive
     );
 
-    boolean existsByResourceIdAndSlotStartBeforeAndSlotEndAfter(
+    @Query("""
+            select s
+            from Slot s
+            where s.resource.id = :resourceId
+              and s.slotStart < :rangeEnd
+              and s.slotEnd > :rangeStart
+            order by s.slotStart asc
+            """)
+    List<Slot> findOverlappingRange(
             Long resourceId,
-            Instant candidateEnd,
-            Instant candidateStart
+            Instant rangeStart,
+            Instant rangeEnd
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

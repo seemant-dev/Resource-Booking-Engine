@@ -1,33 +1,41 @@
 package com.resourcebooking.server.service;
 
+import com.resourcebooking.server.dto.request.SlotGenerateRequest;
+import com.resourcebooking.server.dto.response.SlotGenerateResponse;
 import com.resourcebooking.server.dto.response.SlotResponse;
 import com.resourcebooking.server.entity.Resource;
+import com.resourcebooking.server.entity.Slot;
+import com.resourcebooking.server.exception.InvalidSlotGenerationRequestException;
 import com.resourcebooking.server.exception.ResourceNotFoundException;
 import com.resourcebooking.server.mapper.SlotMapper;
 import com.resourcebooking.server.repository.ResourceRepository;
+import com.resourcebooking.server.repository.SlotBatchRepository;
 import com.resourcebooking.server.repository.SlotRepository;
-import com.resourcebooking.server.dto.request.SlotGenerateRequest;
-import com.resourcebooking.server.dto.response.SlotGenerateResponse;
-import com.resourcebooking.server.entity.Slot;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
-import java.time.Duration;
-import java.time.Instant;
 
 @Slf4j
 @Service
+@Validated
 @RequiredArgsConstructor
 public class SlotService {
 
     private final SlotRepository slotRepository;
+    private final SlotBatchRepository slotBatchRepository;
     private final ResourceRepository resourceRepository;
     private final SlotMapper slotMapper;
+    private final SlotCandidateGenerator slotCandidateGenerator;
+    private final Clock clock;
     private final ZoneId businessTimeZone;
 
     @Transactional(readOnly = true)
@@ -49,54 +57,30 @@ public class SlotService {
     }
 
     @Transactional
-    public SlotGenerateResponse generateSlots(Long resourceId, SlotGenerateRequest request) {
-        Resource resource = resourceRepository.findById(resourceId)
+    public SlotGenerateResponse generateSlots(Long resourceId, @Valid SlotGenerateRequest request) {
+        validateStartDate(request);
+
+        List<SlotWindow> candidates = slotCandidateGenerator.generate(request, businessTimeZone);
+        if (candidates.isEmpty()) {
+            throw new InvalidSlotGenerationRequestException(
+                    "Generation request must produce at least one slot."
+            );
+        }
+
+        Resource resource = resourceRepository.findByIdForUpdate(resourceId)
                 .orElseThrow(() -> new ResourceNotFoundException(resourceId));
 
-        int generated = 0;
-        int skipped = 0;
+        List<Slot> existingSlots = slotRepository.findOverlappingRange(
+                resource.getId(),
+                candidates.getFirst().start(),
+                candidates.getLast().end()
+        );
 
-        LocalDate currentDate = request.getStartDate();
-        while (!currentDate.isAfter(request.getEndDate())) {
-            Instant currentStart = currentDate
-                    .atTime(request.getDayStartTime())
-                    .atZone(businessTimeZone)
-                    .toInstant();
+        List<SlotWindow> availableCandidates = findAvailableCandidates(candidates, existingSlots);
+        int skipped = candidates.size() - availableCandidates.size();
 
-            Instant dayEnd = currentDate
-                    .atTime(request.getDayEndTime())
-                    .atZone(businessTimeZone)
-                    .toInstant();
-
-            Duration slotDuration = Duration.ofMinutes(request.getSlotDurationMinutes());
-
-            while (!currentStart.plus(slotDuration).isAfter(dayEnd)) {
-                Instant currentEnd = currentStart.plus(slotDuration);
-
-                boolean overlapsExistingSlot = slotRepository
-                        .existsByResourceIdAndSlotStartBeforeAndSlotEndAfter(
-                                resource.getId(),
-                                currentEnd,
-                                currentStart
-                        );
-
-                if (overlapsExistingSlot) {
-                    skipped++;
-                } else {
-                    Slot slot = new Slot();
-                    slot.setResource(resource);
-                    slot.setSlotStart(currentStart);
-                    slot.setSlotEnd(currentEnd);
-                    slot.setBooked(false);
-
-                    slotRepository.save(slot);
-                    generated++;
-                }
-
-                currentStart = currentEnd;
-            }
-
-            currentDate = currentDate.plusDays(1);
+        if (!availableCandidates.isEmpty()) {
+            slotBatchRepository.insertAll(resource.getId(), availableCandidates);
         }
 
         log.info(
@@ -104,10 +88,46 @@ public class SlotService {
                 resourceId,
                 request.getStartDate(),
                 request.getEndDate(),
-                generated,
+                availableCandidates.size(),
                 skipped
         );
 
-        return new SlotGenerateResponse(generated, skipped);
+        return new SlotGenerateResponse(availableCandidates.size(), skipped);
     }
+
+    private void validateStartDate(SlotGenerateRequest request) {
+        LocalDate businessToday = LocalDate.now(clock.withZone(businessTimeZone));
+
+        if (request.getStartDate().isBefore(businessToday)) {
+            throw new InvalidSlotGenerationRequestException(
+                    "Start date must be today or later in the business time zone."
+            );
+        }
+    }
+
+    private List<SlotWindow> findAvailableCandidates(
+            List<SlotWindow> candidates,
+            List<Slot> existingSlots
+    ) {
+        List<SlotWindow> available = new ArrayList<>(candidates.size());
+        int existingIndex = 0;
+
+        for (SlotWindow candidate : candidates) {
+            while (existingIndex < existingSlots.size()
+                    && !existingSlots.get(existingIndex).getSlotEnd().isAfter(candidate.start())) {
+                existingIndex++;
+            }
+
+            boolean overlaps = existingIndex < existingSlots.size()
+                    && existingSlots.get(existingIndex).getSlotStart().isBefore(candidate.end())
+                    && existingSlots.get(existingIndex).getSlotEnd().isAfter(candidate.start());
+
+            if (!overlaps) {
+                available.add(candidate);
+            }
+        }
+
+        return available;
+    }
+
 }

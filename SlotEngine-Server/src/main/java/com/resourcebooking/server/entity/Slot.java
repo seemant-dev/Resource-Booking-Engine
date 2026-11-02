@@ -16,12 +16,6 @@ import java.time.Instant;
                     name = "uk_slots_resource_start",
                     columnNames = {"resource_id", "slot_start"}
             )
-        },
-        indexes = {
-                @Index(
-                        name = "idx_slots_resource_start",
-                        columnList = "resource_id, slot_start"
-                )
         }
 )
 public class Slot {

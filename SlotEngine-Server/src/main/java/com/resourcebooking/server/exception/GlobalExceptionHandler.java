@@ -2,13 +2,17 @@ package com.resourcebooking.server.exception;
 
 import com.resourcebooking.server.common.DatabaseConstraints;
 import com.resourcebooking.server.dto.response.ErrorResponse;
+import jakarta.persistence.LockTimeoutException;
 import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PessimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.postgresql.util.PSQLException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -126,6 +130,42 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(InvalidSlotGenerationRequestException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleInvalidSlotGenerationRequest(
+            InvalidSlotGenerationRequestException exception,
+            HttpServletRequest request
+    ) {
+        return new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "SLOT_GENERATION_INVALID",
+                exception.getMessage(),
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler({
+            PessimisticLockException.class,
+            PessimisticLockingFailureException.class,
+            LockTimeoutException.class
+    })
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handlePessimisticLockConflict(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Resource lock unavailable path={}", request.getRequestURI());
+
+        return new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "RESOURCE_BUSY",
+                "Resource is currently being modified. Please try again.",
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
     @ExceptionHandler({
             OptimisticLockException.class,
             ObjectOptimisticLockingFailureException.class
@@ -147,14 +187,28 @@ public class GlobalExceptionHandler {
             DataIntegrityViolationException exception,
             HttpServletRequest request
     ) {
-        if (isBookingConfirmedSlotConstraintViolation(exception)) {
+        String constraintName = findPostgresConstraintName(exception);
+
+        if (DatabaseConstraints.BOOKINGS_CONFIRMED_SLOT_UNIQUE.equals(constraintName)) {
             return slotAlreadyBookedResponse(
                     "Slot is already booked.",
                     request
             );
         }
 
-        log.warn("Data integrity conflict path={}", request.getRequestURI());
+        if (DatabaseConstraints.SLOTS_RESOURCE_TIME_EXCLUSION.equals(constraintName)
+                || DatabaseConstraints.SLOTS_RESOURCE_START_UNIQUE.equals(constraintName)) {
+            return slotGenerationConflictResponse(
+                    "Requested slots overlap the existing schedule. No slots were generated.",
+                    request
+            );
+        }
+
+        log.warn(
+                "Data integrity conflict constraint={} path={}",
+                constraintName,
+                request.getRequestURI()
+        );
 
         return new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
@@ -220,10 +274,33 @@ public class GlobalExceptionHandler {
         );
     }
 
-    private boolean isBookingConfirmedSlotConstraintViolation(DataIntegrityViolationException exception) {
-        String message = exception.getMostSpecificCause().getMessage();
+    private ErrorResponse slotGenerationConflictResponse(
+            String message,
+            HttpServletRequest request
+    ) {
+        log.warn("Slot generation conflict path={}", request.getRequestURI());
 
-        return message != null
-                && message.contains(DatabaseConstraints.BOOKINGS_CONFIRMED_SLOT_UNIQUE);
+        return new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "SLOT_GENERATION_CONFLICT",
+                message,
+                Instant.now(),
+                request.getRequestURI()
+        );
+    }
+
+    private String findPostgresConstraintName(Throwable throwable) {
+        Throwable current = throwable;
+
+        while (current != null) {
+            if (current instanceof PSQLException postgresException
+                    && postgresException.getServerErrorMessage() != null) {
+                return postgresException.getServerErrorMessage().getConstraint();
+            }
+
+            current = current.getCause();
+        }
+
+        return null;
     }
 }

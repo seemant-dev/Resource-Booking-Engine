@@ -41,7 +41,7 @@ class ServerApplicationTests extends AbstractPostgresIntegrationTest {
 		assertThat(Arrays.stream(flyway.info().applied())
 				.map(migration -> migration.getVersion().getVersion())
 				.toList())
-				.containsExactlyInAnyOrder("1", "2", "3", "4");
+				.containsExactlyInAnyOrder("1", "2", "3", "4", "5");
 
 		assertThat(cookieProperties.isSecure()).isFalse();
 		assertThat(cookieProperties.getSameSite()).isEqualTo("Lax");

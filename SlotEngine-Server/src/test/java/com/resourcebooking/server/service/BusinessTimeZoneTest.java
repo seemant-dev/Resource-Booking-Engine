@@ -3,14 +3,13 @@ package com.resourcebooking.server.service;
 import com.resourcebooking.server.dto.request.SlotGenerateRequest;
 import com.resourcebooking.server.dto.response.AdminStatsResponse;
 import com.resourcebooking.server.entity.Resource;
-import com.resourcebooking.server.entity.Slot;
 import com.resourcebooking.server.mapper.BookingMapper;
 import com.resourcebooking.server.mapper.SlotMapper;
 import com.resourcebooking.server.repository.AdminRepository;
 import com.resourcebooking.server.repository.ResourceRepository;
+import com.resourcebooking.server.repository.SlotBatchRepository;
 import com.resourcebooking.server.repository.SlotRepository;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -19,6 +18,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,17 +34,16 @@ class BusinessTimeZoneTest {
     private final ResourceRepository resourceRepository = mock(ResourceRepository.class);
     private final SlotService slotService = new SlotService(
             slotRepository,
+            mock(SlotBatchRepository.class),
             resourceRepository,
             mock(SlotMapper.class),
+            new SlotCandidateGenerator(),
+            Clock.systemUTC(),
             ZoneId.of("Asia/Kolkata")
     );
 
     @Test
     void generatesNineAmBusinessTimeAsThreeThirtyUtc() {
-        Resource resource = mock(Resource.class);
-        when(resource.getId()).thenReturn(1L);
-        when(resourceRepository.findById(1L)).thenReturn(Optional.of(resource));
-
         SlotGenerateRequest request = new SlotGenerateRequest();
         request.setStartDate(LocalDate.of(2026, 1, 1));
         request.setEndDate(LocalDate.of(2026, 1, 1));
@@ -52,12 +51,17 @@ class BusinessTimeZoneTest {
         request.setDayEndTime(LocalTime.of(10, 0));
         request.setSlotDurationMinutes(60);
 
-        slotService.generateSlots(1L, request);
+        List<SlotWindow> slots = new SlotCandidateGenerator().generate(
+                request,
+                ZoneId.of("Asia/Kolkata")
+        );
 
-        ArgumentCaptor<Slot> slot = ArgumentCaptor.forClass(Slot.class);
-        verify(slotRepository).save(slot.capture());
-        assertThat(slot.getValue().getSlotStart()).isEqualTo(Instant.parse("2026-01-01T03:30:00Z"));
-        assertThat(slot.getValue().getSlotEnd()).isEqualTo(Instant.parse("2026-01-01T04:30:00Z"));
+        assertThat(slots).containsExactly(
+                new SlotWindow(
+                        Instant.parse("2026-01-01T03:30:00Z"),
+                        Instant.parse("2026-01-01T04:30:00Z")
+                )
+        );
     }
 
     @Test
