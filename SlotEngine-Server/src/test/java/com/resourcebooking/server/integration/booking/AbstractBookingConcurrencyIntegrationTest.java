@@ -1,6 +1,7 @@
 package com.resourcebooking.server.integration.booking;
 
 import com.resourcebooking.server.dto.response.BookingResponse;
+import com.resourcebooking.server.entity.Booking;
 import com.resourcebooking.server.entity.Resource;
 import com.resourcebooking.server.entity.Slot;
 import com.resourcebooking.server.entity.User;
@@ -26,11 +27,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,7 +83,7 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
 
             BookingAttemptCounts counts = collectAttemptCounts(futures);
 
-            long expectedFailureCount = counts.slotAlreadyBookedCount()
+            long recognizedConflictCount = counts.slotAlreadyBookedCount()
                     + counts.optimisticLockConflictCount()
                     + counts.dataIntegrityConflictCount();
 
@@ -96,7 +99,7 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
                             
                             Booking concurrency result [{}]:
                               successCount = {}
-                              expectedFailureCount = {}
+                              recognizedConflictCount = {}
                               slotAlreadyBookedCount = {}
                               optimisticLockConflictCount = {}
                               dataIntegrityConflictCount = {}
@@ -106,7 +109,7 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
                             """,
                     strategyName,
                     counts.successCount(),
-                    expectedFailureCount,
+                    recognizedConflictCount,
                     counts.slotAlreadyBookedCount(),
                     counts.optimisticLockConflictCount(),
                     counts.dataIntegrityConflictCount(),
@@ -116,11 +119,63 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
             );
 
             assertThat(counts.successCount()).isEqualTo(1);
-            assertThat(expectedFailureCount).isEqualTo(ATTEMPT_COUNT - 1);
+            assertThat(recognizedConflictCount).isEqualTo(ATTEMPT_COUNT - 1);
             assertThat(counts.otherFailureCount()).isZero();
             assertThat(confirmedBookingCount).isEqualTo(1);
             assertThat(updatedSlot.isBooked()).isTrue();
         } finally {
+            executorService.shutdownNow();
+        }
+    }
+
+    protected void verifyAllDifferentSlotBookingsSucceedUnderConcurrentLoad(String strategyName) throws Exception {
+        Resource resource = createResource(strategyName + " Independent Slots");
+        List<BookingAssignment> assignments = createBookingAssignments(strategyName, resource);
+
+        ExecutorService executorService = Executors.newFixedThreadPool(ATTEMPT_COUNT);
+        CountDownLatch readyLatch = new CountDownLatch(ATTEMPT_COUNT);
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        try {
+            List<Future<BookingAttemptResult>> futures = new ArrayList<>();
+
+            for (BookingAssignment assignment : assignments) {
+                futures.add(executorService.submit(createBookingAttempt(
+                        assignment.slotId(),
+                        assignment.user(),
+                        readyLatch,
+                        startLatch
+                )));
+            }
+
+            readyLatch.await();
+            startLatch.countDown();
+
+            BookingAttemptCounts counts = collectAttemptCounts(futures);
+            List<Booking> bookings = bookingRepository.findAll();
+            Map<Long, Long> expectedUserBySlot = assignments.stream()
+                    .collect(Collectors.toMap(
+                            BookingAssignment::slotId,
+                            assignment -> assignment.user().id()
+                    ));
+
+            assertThat(counts.successCount()).isEqualTo(ATTEMPT_COUNT);
+            assertThat(counts.slotAlreadyBookedCount()).isZero();
+            assertThat(counts.optimisticLockConflictCount()).isZero();
+            assertThat(counts.dataIntegrityConflictCount()).isZero();
+            assertThat(counts.otherFailureCount()).isZero();
+
+            assertThat(bookings).hasSize(ATTEMPT_COUNT).allSatisfy(booking -> {
+                assertThat(booking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
+                assertThat(booking.getUser().getId())
+                        .isEqualTo(expectedUserBySlot.get(booking.getSlot().getId()));
+            });
+
+            assertThat(slotRepository.findAllById(expectedUserBySlot.keySet()))
+                    .hasSize(ATTEMPT_COUNT)
+                    .allSatisfy(slot -> assertThat(slot.isBooked()).isTrue());
+        } finally {
+            startLatch.countDown();
             executorService.shutdownNow();
         }
     }
@@ -204,9 +259,23 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
     }
 
     private TestUser createBookingUser(String strategyName) {
+        return saveBookingUser(
+                strategyName + " Concurrency User",
+                strategyName + "-concurrency@example.com"
+        );
+    }
+
+    private TestUser createBookingUser(String strategyName, int userNumber) {
+        return saveBookingUser(
+                strategyName + " Concurrency User " + userNumber,
+                strategyName + "-concurrency-" + userNumber + "@example.com"
+        );
+    }
+
+    private TestUser saveBookingUser(String name, String email) {
         User user = new User();
-        user.setName(strategyName + " Concurrency User");
-        user.setEmail(strategyName + "-concurrency@example.com");
+        user.setName(name);
+        user.setEmail(email);
         user.setPasswordHash("test-only-password-hash");
         user.setRole(Role.USER);
 
@@ -221,15 +290,39 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
         );
     }
 
-    private Slot createAvailableSlot(String strategyName) {
-        Resource resource = new Resource();
-        resource.setName(strategyName + " Concurrency Test Room " + System.nanoTime());
-        resource.setDescription("Created by " + strategyName + " concurrency test");
+    private List<BookingAssignment> createBookingAssignments(String strategyName, Resource resource) {
+        Instant firstSlotStart = Instant.parse("2027-08-01T09:00:00Z");
+        List<BookingAssignment> assignments = new ArrayList<>(ATTEMPT_COUNT);
 
-        Resource savedResource = resourceRepository.save(resource);
+        for (int i = 0; i < ATTEMPT_COUNT; i++) {
+            TestUser user = createBookingUser(strategyName, i + 1);
+            Instant slotStart = firstSlotStart.plusSeconds(i * 30L * 60L);
+
+            Slot slot = new Slot();
+            slot.setResource(resource);
+            slot.setSlotStart(slotStart);
+            slot.setSlotEnd(slotStart.plusSeconds(30L * 60L));
+            slot.setBooked(false);
+
+            Slot savedSlot = slotRepository.save(slot);
+            assignments.add(new BookingAssignment(user, savedSlot.getId()));
+        }
+
+        return assignments;
+    }
+
+    private Resource createResource(String testName) {
+        Resource resource = new Resource();
+        resource.setName(testName + " Test Room " + System.nanoTime());
+        resource.setDescription("Created by " + testName + " concurrency test");
+        return resourceRepository.save(resource);
+    }
+
+    private Slot createAvailableSlot(String strategyName) {
+        Resource resource = createResource(strategyName);
 
         Slot slot = new Slot();
-        slot.setResource(savedResource);
+        slot.setResource(resource);
         slot.setSlotStart(Instant.parse("2026-08-01T10:00:00Z"));
         slot.setSlotEnd(Instant.parse("2026-08-01T10:30:00Z"));
         slot.setBooked(false);
@@ -252,6 +345,9 @@ abstract class AbstractBookingConcurrencyIntegrationTest extends AbstractPostgre
             String passwordHash,
             Role role
     ) {
+    }
+
+    private record BookingAssignment(TestUser user, Long slotId) {
     }
 
     private record BookingAttemptCounts(

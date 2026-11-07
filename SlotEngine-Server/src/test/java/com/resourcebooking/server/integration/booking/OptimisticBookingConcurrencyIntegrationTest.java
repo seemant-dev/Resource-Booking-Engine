@@ -10,4 +10,9 @@ class OptimisticBookingConcurrencyIntegrationTest extends AbstractBookingConcurr
     void optimisticLockingAllowsOnlyOneSuccessfulBookingForSameSlot() throws Exception {
         verifyOnlyOneBookingSucceedsUnderConcurrentLoad("optimistic");
     }
+
+    @Test
+    void optimisticLockingAllowsConcurrentBookingsForDifferentSlots() throws Exception {
+        verifyAllDifferentSlotBookingsSucceedUnderConcurrentLoad("optimistic");
+    }
 }
