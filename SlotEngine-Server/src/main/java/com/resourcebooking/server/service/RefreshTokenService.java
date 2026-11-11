@@ -36,7 +36,7 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
     public RefreshToken rotate(String token) {
         RefreshToken existingToken = findValidToken(token);
         User user = existingToken.getUser();

@@ -220,6 +220,30 @@ class BookingHttpIntegrationTest extends AbstractPostgresIntegrationTest {
         assertThat(slotRepository.findById(slot.getId()).orElseThrow().isBooked()).isFalse();
     }
 
+    @Test
+    void bookingMissingSlotShouldReturnNotFoundWithoutCreatingBooking() throws Exception {
+        User user = createUser("missing-slot-booker", Role.USER);
+
+        mockMvc.perform(post("/api/slots/{id}/book", 999_999L)
+                        .cookie(login(user)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("SLOT_NOT_FOUND"));
+
+        assertThat(bookingRepository.count()).isZero();
+    }
+
+    @Test
+    void cancellingMissingBookingShouldReturnNotFoundWithoutChangingBookings() throws Exception {
+        User user = createUser("missing-booking-canceller", Role.USER);
+
+        mockMvc.perform(delete("/api/bookings/{id}", 999_999L)
+                        .cookie(login(user)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("BOOKING_NOT_FOUND"));
+
+        assertThat(bookingRepository.count()).isZero();
+    }
+
     private User createUser(String emailPrefix, Role role) {
         User user = new User();
         user.setName(emailPrefix);

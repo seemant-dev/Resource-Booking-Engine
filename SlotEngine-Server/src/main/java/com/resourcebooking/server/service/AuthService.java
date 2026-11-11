@@ -8,6 +8,7 @@ import com.resourcebooking.server.entity.RefreshToken;
 import com.resourcebooking.server.entity.User;
 import com.resourcebooking.server.enums.Role;
 import com.resourcebooking.server.exception.EmailAlreadyExistsException;
+import com.resourcebooking.server.exception.InvalidRefreshTokenException;
 import com.resourcebooking.server.mapper.UserMapper;
 import com.resourcebooking.server.repository.UserRepository;
 import com.resourcebooking.server.security.JwtTokenProvider;
@@ -84,7 +85,7 @@ public class AuthService {
         );
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
     public TokenRefreshResult refresh(String refreshTokenValue) {
         RefreshToken newRefreshToken = refreshTokenService.rotate(refreshTokenValue);
         UserPrincipal principal = UserPrincipal.from(newRefreshToken.getUser());

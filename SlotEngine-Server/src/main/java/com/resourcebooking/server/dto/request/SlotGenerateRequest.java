@@ -81,19 +81,6 @@ public class SlotGenerateRequest {
                 || slotDurationMinutes % SlotGenerationRules.TIME_GRID_MINUTES == 0;
     }
 
-    @AssertTrue(message = "Daily time window must divide exactly by the slot duration")
-    public boolean isDailyWindowDivisible() {
-        if (dayStartTime == null
-                || dayEndTime == null
-                || !dayEndTime.isAfter(dayStartTime)
-                || slotDurationMinutes <= 0) {
-            return true;
-        }
-
-        return SlotGenerationRules.dailyWindowMinutes(dayStartTime, dayEndTime)
-                % slotDurationMinutes == 0;
-    }
-
     @AssertTrue(message = "A generation request must not exceed 1500 slots")
     public boolean isCandidateCountWithinLimit() {
         if (startDate == null

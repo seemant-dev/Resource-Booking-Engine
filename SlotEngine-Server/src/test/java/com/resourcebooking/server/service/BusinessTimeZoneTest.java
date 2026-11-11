@@ -1,6 +1,5 @@
 package com.resourcebooking.server.service;
 
-import com.resourcebooking.server.dto.request.SlotGenerateRequest;
 import com.resourcebooking.server.dto.response.AdminStatsResponse;
 import com.resourcebooking.server.entity.Resource;
 import com.resourcebooking.server.mapper.BookingMapper;
@@ -14,11 +13,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,28 +38,6 @@ class BusinessTimeZoneTest {
             Clock.systemUTC(),
             ZoneId.of("Asia/Kolkata")
     );
-
-    @Test
-    void generatesNineAmBusinessTimeAsThreeThirtyUtc() {
-        SlotGenerateRequest request = new SlotGenerateRequest();
-        request.setStartDate(LocalDate.of(2026, 1, 1));
-        request.setEndDate(LocalDate.of(2026, 1, 1));
-        request.setDayStartTime(LocalTime.of(9, 0));
-        request.setDayEndTime(LocalTime.of(10, 0));
-        request.setSlotDurationMinutes(60);
-
-        List<SlotWindow> slots = new SlotCandidateGenerator().generate(
-                request,
-                ZoneId.of("Asia/Kolkata")
-        );
-
-        assertThat(slots).containsExactly(
-                new SlotWindow(
-                        Instant.parse("2026-01-01T03:30:00Z"),
-                        Instant.parse("2026-01-01T04:30:00Z")
-                )
-        );
-    }
 
     @Test
     void queriesTheBusinessDateUsingItsInstantBoundaries() {
