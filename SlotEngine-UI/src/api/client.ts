@@ -1,9 +1,8 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
 type ApiRequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
 };
+
+type ApiPath = `/api/${string}`;
 
 type ApiErrorBody = {
   status?: number;
@@ -28,10 +27,10 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(
-  path: string,
+  path: ApiPath,
   options: ApiRequestOptions = {},
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(path, {
     ...options,
     credentials: "include",
     headers: buildHeaders(options.headers, options.body),
