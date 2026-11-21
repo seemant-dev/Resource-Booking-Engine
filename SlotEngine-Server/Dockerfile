@@ -15,7 +15,10 @@ FROM eclipse-temurin:21-jre-jammy AS runtime
 ARG APP_UID=10001
 ARG APP_USER=slotengine
 
-RUN groupadd --gid "${APP_UID}" "${APP_USER}" && \
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid "${APP_UID}" "${APP_USER}" && \
     useradd --uid "${APP_UID}" \
             --gid "${APP_UID}" \
             --no-create-home \
